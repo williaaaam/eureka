@@ -36,18 +36,25 @@ import com.thoughtworks.xstream.annotations.XStreamOmitField;
  */
 @JsonRootName("leaseInfo")
 public class LeaseInfo {
-
+	// 默认的续约周期时间，单位秒
     public static final int DEFAULT_LEASE_RENEWAL_INTERVAL = 30;
+	// 默认的租约有效时长，单位秒
     public static final int DEFAULT_LEASE_DURATION = 90;
 
     // Client settings
+	// 客户端续约周期
     private int renewalIntervalInSecs = DEFAULT_LEASE_RENEWAL_INTERVAL;
+	// 客户端需要设置的租约有效时长
     private int durationInSecs = DEFAULT_LEASE_DURATION;
 
     // Server populated
+	// 服务端设置租约的第一次注册时间
     private long registrationTimestamp;
+	// 租约最后一次续约时间
     private long lastRenewalTimestamp;
+	// 服务被剔除的时间
     private long evictionTimestamp;
+	// 服务实例标记为UP的时间
     private long serviceUpTimestamp;
 
     public static final class Builder {

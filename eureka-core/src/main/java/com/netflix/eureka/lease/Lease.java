@@ -36,13 +36,31 @@ public class Lease<T> {
         Register, Cancel, Renew
     };
 
+	/**
+	 * 默认Eureka Server 90s没收到Eureka Client的心跳，则会把服务剔除
+	 */
     public static final int DEFAULT_DURATION_IN_SECS = 90;
 
     private T holder;
+
+	/**
+	 *
+	 */
     private long evictionTimestamp;
+
+	/**
+	 *
+	 */
     private long registrationTimestamp;
+	/**
+	 *
+	 */
     private long serviceUpTimestamp;
     // Make it volatile so that the expiration task would see this quicker
+
+	/**
+	 *
+	 */
     private volatile long lastUpdateTimestamp;
     private long duration;
 

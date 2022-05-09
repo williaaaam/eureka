@@ -102,7 +102,15 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     private final AtomicReference<EvictionTask> evictionTaskRef = new AtomicReference<>();
 
     protected String[] allKnownRemoteRegions = EMPTY_STR_ARRAY;
+	/**
+	 * 每分钟期望的续约数 = 期望Eureka Client发送的续约数 * (60 秒 / 预计客户端间隔秒数续约[默认 30 秒]) * 0.85
+	 *
+	 * 比如：现在注册中心有 20 个服务
+	 * 那么：每分钟期望的续约数 = 20 * (60 / 30) * 0.85 = 17
+	 */
+	// 每分钟期望的续约数
     protected volatile int numberOfRenewsPerMinThreshold;
+	// 期望 Eureka Client 发送的续约数，这个值会根据服务的动作进行更新：服务注册 + 1与服务下线 - 1
     protected volatile int expectedNumberOfClientsSendingRenews;
 
     protected final EurekaServerConfig serverConfig;
@@ -119,7 +127,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         this.serverCodecs = serverCodecs;
         this.recentCanceledQueue = new CircularQueue<Pair<Long, String>>(1000);
         this.recentRegisteredQueue = new CircularQueue<Pair<Long, String>>(1000);
-
+		// 定时任务MeasuredRate计算每分钟应用续约的个数
         this.renewsLastMin = new MeasuredRate(1000 * 60 * 1);
 
         this.deltaRetentionTimer.schedule(getDeltaRetentionTask(),
@@ -193,28 +201,35 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
     public void register(InstanceInfo registrant, int leaseDuration, boolean isReplication) {
         read.lock();
         try {
+			// 注册表
             Map<String, Lease<InstanceInfo>> gMap = registry.get(registrant.getAppName());
             REGISTER.increment(isReplication);
             if (gMap == null) {
+				// 服务没有注册过
                 final ConcurrentHashMap<String, Lease<InstanceInfo>> gNewMap = new ConcurrentHashMap<String, Lease<InstanceInfo>>();
                 gMap = registry.putIfAbsent(registrant.getAppName(), gNewMap);
                 if (gMap == null) {
                     gMap = gNewMap;
                 }
             }
+			// 拿到应用实例
             Lease<InstanceInfo> existingLease = gMap.get(registrant.getId());
             // Retain the last dirty timestamp without overwriting it, if there is already a lease
             if (existingLease != null && (existingLease.getHolder() != null)) {
+				//
                 Long existingLastDirtyTimestamp = existingLease.getHolder().getLastDirtyTimestamp();
+				//
                 Long registrationLastDirtyTimestamp = registrant.getLastDirtyTimestamp();
                 logger.debug("Existing lease found (existing={}, provided={}", existingLastDirtyTimestamp, registrationLastDirtyTimestamp);
 
                 // this is a > instead of a >= because if the timestamps are equal, we still take the remote transmitted
                 // InstanceInfo instead of the server local copy.
+				// 判断活跃度
                 if (existingLastDirtyTimestamp > registrationLastDirtyTimestamp) {
                     logger.warn("There is an existing lease and the existing lease's dirty timestamp {} is greater" +
                             " than the one that is being registered {}", existingLastDirtyTimestamp, registrationLastDirtyTimestamp);
                     logger.warn("Using the existing instanceInfo instead of the new instanceInfo as the registrant");
+					// 注册信息冲突的解决方案：旧的实例信息代替新的
                     registrant = existingLease.getHolder();
                 }
             } else {
@@ -228,11 +243,14 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 }
                 logger.debug("No previous lease information found; it is new registration");
             }
+
+			// 构造新的续约对象
             Lease<InstanceInfo> lease = new Lease<>(registrant, leaseDuration);
             if (existingLease != null) {
                 lease.setServiceUpTimestamp(existingLease.getServiceUpTimestamp());
             }
             gMap.put(registrant.getId(), lease);
+			//
             recentRegisteredQueue.add(new Pair<Long, String>(
                     System.currentTimeMillis(),
                     registrant.getAppName() + "(" + registrant.getId() + ")"));
@@ -583,13 +601,19 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         evict(0l);
     }
 
+	/**
+	 * 服务剔除
+	 * @param additionalLeaseMs
+	 */
     public void evict(long additionalLeaseMs) {
         logger.debug("Running the evict task");
 
-        if (!isLeaseExpirationEnabled()) {
+        if (!isLeaseExpirationEnabled()) { // 如果开启了自我保护机制，也就是isLeaseExpirationEnabled返回false,那么直接返回，不进行服务下线
             logger.debug("DS: lease expiration is currently disabled.");
             return;
         }
+
+		// 未开启服务保护机制
 
         // We collect first all expired items, to evict them in random order. For large eviction sets,
         // if we do not that, we might wipe out whole apps before self preservation kicks in. By randomizing it,
@@ -601,6 +625,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
                 for (Entry<String, Lease<InstanceInfo>> leaseEntry : leaseMap.entrySet()) {
                     Lease<InstanceInfo> lease = leaseEntry.getValue();
                     if (lease.isExpired(additionalLeaseMs) && lease.getHolder() != null) {
+						// 根据上次更新时间和租约持续时长查找待清除实例
                         expiredLeases.add(lease);
                     }
                 }
@@ -609,8 +634,11 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
 
         // To compensate for GC pauses or drifting local time, we need to use current registry size as a base for
         // triggering self-preservation. Without that we would wipe out full registry.
+		// 本地注册表大小
         int registrySize = (int) getLocalRegistrySize();
+		//
         int registrySizeThreshold = (int) (registrySize * serverConfig.getRenewalPercentThreshold());
+		// 剔除的实例个数
         int evictionLimit = registrySize - registrySizeThreshold;
 
         int toEvict = Math.min(expiredLeases.size(), evictionLimit);
@@ -1243,6 +1271,7 @@ public abstract class AbstractInstanceRegistry implements InstanceRegistry {
         @Override
         public void run() {
             try {
+				// 补偿Controller到定时器的请求毫秒数
                 long compensationTimeMs = getCompensationTimeMs();
                 logger.info("Running the evict task with compensationTime {}ms", compensationTimeMs);
                 evict(compensationTimeMs);

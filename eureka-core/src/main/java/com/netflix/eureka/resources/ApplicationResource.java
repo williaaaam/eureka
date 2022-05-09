@@ -131,11 +131,12 @@ public class ApplicationResource {
     }
 
     /**
+	 * 服务注册入口
      * Registers information about a particular instance for an
      * {@link com.netflix.discovery.shared.Application}.
      *
      * @param info
-     *            {@link InstanceInfo} information of the instance.
+     *            {@link InstanceInfo} information of the instance. 实例信息
      * @param isReplication
      *            a header parameter containing information whether this is
      *            replicated from other nodes.
@@ -184,6 +185,7 @@ public class ApplicationResource {
         }
 
         registry.register(info, "true".equals(isReplication));
+		// 服务注册成功 返回204
         return Response.status(204).build();  // 204 to be backwards compatible
     }
 

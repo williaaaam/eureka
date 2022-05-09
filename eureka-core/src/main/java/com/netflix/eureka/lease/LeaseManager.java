@@ -36,6 +36,7 @@ import com.netflix.eureka.registry.AbstractInstanceRegistry;
 public interface LeaseManager<T> {
 
     /**
+	 * 注册服务实例
      * Assign a new {@link Lease} to the passed in {@link T}.
      *
      * @param r
@@ -47,6 +48,7 @@ public interface LeaseManager<T> {
     void register(T r, int leaseDuration, boolean isReplication);
 
     /**
+	 * 删除服务实例
      * Cancel the {@link Lease} associated w/ the passed in <code>appName</code>
      * and <code>id</code>.
      *
@@ -61,6 +63,7 @@ public interface LeaseManager<T> {
     boolean cancel(String appName, String id, boolean isReplication);
 
     /**
+	 * 与Eureka Server进行心跳，维持租约
      * Renew the {@link Lease} associated w/ the passed in <code>appName</code>
      * and <code>id</code>.
      *
@@ -73,6 +76,7 @@ public interface LeaseManager<T> {
     boolean renew(String appName, String id, boolean isReplication);
 
     /**
+	 * 剔除租约过期的服务实例
      * Evict {@link T}s with expired {@link Lease}(s).
      */
     void evict();

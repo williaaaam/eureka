@@ -63,6 +63,7 @@ import javax.inject.Singleton;
 import static com.netflix.eureka.Names.METRIC_REGISTRY_PREFIX;
 
 /**
+ * 集群信息共享
  * Handles replication of all operations to {@link AbstractInstanceRegistry} to peer
  * <em>Eureka</em> nodes to keep them all in sync.
  *
@@ -405,10 +406,12 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     @Override
     public void register(final InstanceInfo info, final boolean isReplication) {
         int leaseDuration = Lease.DEFAULT_DURATION_IN_SECS;
+		// 获取客户端配置的租约过期时间
         if (info.getLeaseInfo() != null && info.getLeaseInfo().getDurationInSecs() > 0) {
             leaseDuration = info.getLeaseInfo().getDurationInSecs();
         }
         super.register(info, leaseDuration, isReplication);
+		// 将注册信息同步给集群其他节点
         replicateToPeers(Action.Register, info.getAppName(), info.getId(), info, null, isReplication);
     }
 
@@ -480,9 +483,11 @@ public class PeerAwareInstanceRegistryImpl extends AbstractInstanceRegistry impl
     @Override
     public boolean isLeaseExpirationEnabled() {
         if (!isSelfPreservationModeEnabled()) {
+			// 没有开启自我保护，直接进行服务过期处理
             // The self preservation mode is disabled, hence allowing the instances to expire.
             return true;
         }
+		// 判断每分钟期望的续约数(numberOfRenewsPerMinThreshold) 大于 0 并且实际每分钟的续约数(getNumOfRenewsInLastMin()) 大于每分钟期望的续约数(numberOfRenewsPerMinThreshold)
         return numberOfRenewsPerMinThreshold > 0 && getNumOfRenewsInLastMin() > numberOfRenewsPerMinThreshold;
     }
 

@@ -87,11 +87,16 @@ public interface InstanceRegistry extends LeaseManager<InstanceInfo>, LookupServ
     List<Pair<Long, String>> getLastNCanceledInstances();
 
     /**
+	 * 打开租约过期
      * Checks whether lease expiration is enabled.
      * @return true if enabled
      */
     boolean isLeaseExpirationEnabled();
 
+	/**
+	 * 自我保护模式
+	 * @return
+	 */
     boolean isSelfPreservationModeEnabled();
 
 }
