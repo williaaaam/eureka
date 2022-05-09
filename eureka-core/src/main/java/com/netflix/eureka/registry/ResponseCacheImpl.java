@@ -58,6 +58,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * 缓存注册表信息，方便客户端查询
+ *
  * The class that is responsible for caching registry information that will be
  * queried by the clients.
  *
@@ -112,9 +114,16 @@ public class ResponseCacheImpl implements ResponseCache {
                 }
             });
 
+	/**
+	 * 一级缓存
+	 */
     private final ConcurrentMap<Key, Value> readOnlyCacheMap = new ConcurrentHashMap<Key, Value>();
 
+	/**
+	 * 二级缓存
+	 */
     private final LoadingCache<Key, Value> readWriteCacheMap;
+
     private final boolean shouldUseReadOnlyResponseCache;
     private final AbstractInstanceRegistry registry;
     private final EurekaServerConfig serverConfig;
@@ -153,6 +162,7 @@ public class ResponseCacheImpl implements ResponseCache {
                         });
 
         if (shouldUseReadOnlyResponseCache) {
+			// 每30s更新一级缓存
             timer.schedule(getCacheUpdateTask(),
                     new Date(((System.currentTimeMillis() / responseCacheUpdateIntervalMs) * responseCacheUpdateIntervalMs)
                             + responseCacheUpdateIntervalMs),
@@ -181,6 +191,7 @@ public class ResponseCacheImpl implements ResponseCache {
                         Value cacheValue = readWriteCacheMap.get(key);
                         Value currentCacheValue = readOnlyCacheMap.get(key);
                         if (cacheValue != currentCacheValue) {
+							// 以二级缓存为主
                             readOnlyCacheMap.put(key, cacheValue);
                         }
                     } catch (Throwable th) {
